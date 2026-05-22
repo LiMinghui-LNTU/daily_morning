@@ -1,21 +1,15 @@
 from datetime import date, datetime
-import math
-from wechatpy import WeChatClient
-from wechatpy.client.api import WeChatMessage, WeChatTemplate
 import requests
 import os
-import random
 
 today = datetime.now()
 start_date = os.environ['START_DATE']
 city = os.environ['CITY']
 birthday = os.environ['BIRTHDAY']
-
-app_id = os.environ["APP_ID"]
-app_secret = os.environ["APP_SECRET"]
-
-user_id = os.environ["USER_ID"]
-template_id = os.environ["TEMPLATE_ID"]
+webhook_url = os.environ.get(
+  "WECHAT_WORK_WEBHOOK",
+  "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=a0d392fd-a5dc-4ae7-8d41-1837e31caf84"
+)
 
 
 def get_weather():
@@ -41,14 +35,34 @@ def get_words():
     return get_words()
   return words.json()['data']['text']
 
-def get_random_color():
-  return "#%06x" % random.randint(0, 0xFFFFFF)
+
+def build_message(weather, temperature, love_days, birthday_left, words):
+  return "\n".join([
+    "## \u6bcf\u65e5\u63a8\u9001",
+    "",
+    f"> \u57ce\u5e02\uff1a{city}",
+    f"> \u5929\u6c14\uff1a{weather}",
+    f"> \u6e29\u5ea6\uff1a{temperature}",
+    f"> \u5728\u4e00\u8d77\uff1a<font color=\"info\">{love_days}</font> \u5929",
+    f"> \u8ddd\u79bb\u751f\u65e5\uff1a<font color=\"warning\">{birthday_left}</font> \u5929",
+    "",
+    words
+  ])
 
 
-client = WeChatClient(app_id, app_secret)
+def send_group_message(content):
+  payload = {
+    "msgtype": "markdown",
+    "markdown": {
+      "content": content
+    }
+  }
+  response = requests.post(webhook_url, json=payload, timeout=10)
+  response.raise_for_status()
+  return response.json()
 
-wm = WeChatMessage(client)
+
 wea, temperature = get_weather()
-data = {"weather":{"value":wea},"temperature":{"value":temperature},"love_days":{"value":get_count()},"birthday_left":{"value":get_birthday()},"words":{"value":get_words(), "color":get_random_color()}}
-res = wm.send_template(user_id, template_id, data)
+message = build_message(wea, temperature, get_count(), get_birthday(), get_words())
+res = send_group_message(message)
 print(res)
